@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <jit/jit-plus.h>
 #include <jit/jit.h>
+#include <unordered_map>
 
 using namespace std;
 
@@ -49,9 +50,9 @@ void print_int(int n) {
 class jit_compiled_func : public jit_function
 {
 public:
-    explicit jit_compiled_func(jit_context& context, int* instructions, bool is_void, int num_args, int ip_start, int ip_end, int* memory, int* stack, int* stack_size):
+    explicit jit_compiled_func(jit_context& context, int* instructions, bool is_void, int num_args, int* ip , int* memory, int* stack, int* stack_size):
                      jit_function(context),
-                     instructions(instructions), num_args(num_args), ip_start(ip_start), ip_end(ip_end), is_void(is_void)
+                     instructions(instructions), num_args(num_args), ip_ptr(ip), is_void(is_void)
     {
         this->memory_outer = memory;
         this->stack_outer = stack;
@@ -61,14 +62,15 @@ public:
     }
 
     void build() override {
+        cout << "build() called\n";
         auto memory = new_value(jit_type_create_pointer(jit_type_int, 1));
         memory = this->new_constant(memory_outer);
         auto stack = new_value(jit_type_create_pointer(jit_type_int, 1));
         stack = this->new_constant(stack_outer);
         jit_value stack_size_ptr = new_value(jit_type_create_pointer(jit_type_int, 1));
         stack_size_ptr = this->new_constant(stack_size_ptr_outer);
-        auto ip = ip_start;
-        while (ip < ip_end) {
+        int& ip = *ip_ptr;
+        while (true) {
             ip++;
             switch (instructions[ip - 1]) {
                 case OP_PUSHI: {
@@ -94,10 +96,10 @@ public:
                                            &tmp, 1, 0);
                     break;
                 }
-                case OP_DONE: {
+                /*case OP_DONE: {
                     insn_return();
                     return;
-                }
+                }*/
                 case OP_ADD: {
                     auto arg1 = pop_from_stack(stack, stack_size_ptr);
                     auto arg2 = pop_from_stack(stack, stack_size_ptr);
@@ -153,9 +155,12 @@ public:
                     push_on_stack(stack, stack_size_ptr, arg2 <= arg1);
                     break;
                 }
+                case 0xcafe: {
+                    ip++;
+                }
                 default: {
-                    cerr << "UNKNOWN INSTRUCTION: " << instructions[ip - 1] << endl;
-                    exit(12);
+                    insn_return();
+                    return;
                 }
             }
         }
@@ -191,7 +196,8 @@ protected:
 
 private:
     int* instructions;
-    int num_args, ip_start, ip_end;
+    int num_args;
+    int* ip_ptr;
     bool is_void;
     int* memory_outer;
     int* stack_outer;
@@ -201,13 +207,13 @@ private:
 class VM {
 public:
     // program is the pointer to instructions; size is the number of instructions
-    explicit VM(int* program, int size) : instructions(program), context(),
-                                          main_func(context, instructions, true, 0, 0, size, &memory[0], &stack[0], &stack_size) {
+    explicit VM(int* program, int size) : instructions(program), context() {
+        instrunctions_number = size;
     }
 
     void run() {
         size_t ip = 0;
-        while (true) {
+        while (ip < instrunctions_number) {
             ip++;
             switch (instructions[ip - 1]) {
                 case OP_JUMP: {
@@ -359,18 +365,57 @@ public:
                 }
             }
         }
+        cerr << "no more instructions";
     }
 
     void jit_run() {
-        //main_func.build_start();
-        //main_func.build();
-        //main_func.compile();
-        //main_func.build_end();
-        auto func_ptr = (void (*)())(main_func.closure());
-        func_ptr();
+        ip = 0;
+        while (ip < instrunctions_number) {
+            if (is_jump(instructions[ip])) {
+                ip++;
+                switch (instructions[ip - 1]) {
+                    case OP_JUMP: {
+                        auto arg = instructions[ip];
+                        ip++;
+                        ip = arg;
+                        break;
+                    }
+                    case OP_JUMP_IF_TRUE: {
+                        auto arg = instructions[ip];
+                        ip++;
+                        if (stack_pop()) {
+                            ip = arg;
+                        }
+                        break;
+                    }
+                    case OP_JUMP_IF_FALSE: {
+                        auto arg = instructions[ip];
+                        ip++;
+                        if (!stack_pop()) {
+                            ip = arg;
+                        }
+                        break;
+                    }
+                }
+            }
+            else if (instructions[ip] == OP_DONE) {
+                return;
+            } else {
+                if (jit_cache.count(ip) == 0) {
+                    jit_cache.insert_or_assign(ip, jit_compiled_func(context, instructions, true, 0, &ip, memory, stack, &stack_size));
+                }
+                auto func = (void(*)())jit_cache.at(ip).closure();
+                func();
+                ip--;
+            }
+        }
     }
 
 private:
+    static bool is_jump(int instr) {
+        return instr == OP_JUMP || instr == OP_JUMP_IF_FALSE || instr == OP_JUMP_IF_TRUE;
+    }
+
     friend class jit_compiled_func;
 
     void store_to_memory(int addr, int value) {
@@ -383,10 +428,12 @@ private:
 
     int* instructions;
     jit_context context;
-    jit_compiled_func main_func;
+    unordered_map<int, jit_compiled_func> jit_cache;
     int stack[STACK_SIZE];
     int memory[MEMORY_SIZE];
     int stack_size = 0;
+    int ip = 0;
+    int instrunctions_number = 0;
 };
 
 int main(int argc, char** argv) {
@@ -413,7 +460,7 @@ int main(int argc, char** argv) {
     }
     VM vm(memory, file_size / sizeof(*memory));
     for (int i = 0; i < 1; i++) {
-        vm.run();
+        vm.jit_run();
     }
     if (munmap(memory, file_size) < 0 || close(fd)) {
         cerr << strerror(errno);
