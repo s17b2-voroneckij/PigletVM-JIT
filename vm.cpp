@@ -62,13 +62,19 @@ public:
     }
 
     void build() override {
-        cout << "build() called\n";
+        cerr << "function being built" << endl;
         auto memory = new_value(jit_type_create_pointer(jit_type_int, 1));
         memory = this->new_constant(memory_outer);
         auto stack = new_value(jit_type_create_pointer(jit_type_int, 1));
         stack = this->new_constant(stack_outer);
         jit_value stack_size_ptr = new_value(jit_type_create_pointer(jit_type_int, 1));
         stack_size_ptr = this->new_constant(stack_size_ptr_outer);
+        auto push = [this, &stack, &stack_size_ptr] (jit_value&& value) {
+            push_on_stack(stack, stack_size_ptr, std::move(value));
+        };
+        auto pop = [this, &stack, &stack_size_ptr] () {
+            return pop_from_stack(stack, stack_size_ptr);
+        };
         int& ip = *ip_ptr;
         while (true) {
             ip++;
@@ -76,22 +82,28 @@ public:
                 case OP_PUSHI: {
                     auto arg = instructions[ip];
                     ip++;
-                    push_on_stack(stack, stack_size_ptr, arg);
+                    push(new_constant(arg));
                     break;
                 }
                 case OP_STORE: {
-                    auto val = pop_from_stack(stack, stack_size_ptr);
-                    auto index = pop_from_stack(stack, stack_size_ptr);
+                    auto val = pop();
+                    auto index = pop();
                     insn_store_elem(memory, index, val);
                     break;
                 }
+                case OP_STOREI: {
+                    auto addr = instructions[ip];
+                    ip++;
+                    insn_store_elem(memory, new_constant(addr), pop());
+                    break;
+                }
                 case OP_LOAD: {
-                    auto ind = pop_from_stack(stack, stack_size_ptr);
-                    push_on_stack(stack, stack_size_ptr, insn_load_elem(memory, ind, jit_type_int));
+                    auto ind = pop();
+                    push(insn_load_elem(memory, ind, jit_type_int));
                     break;
                 }
                 case OP_PRINT: {
-                    auto tmp = pop_from_stack(stack, stack_size_ptr).raw();
+                    auto tmp = pop().raw();
                     this->insn_call_native("print_int", (void *)(&print_int), signature_helper(jit_type_void, jit_type_int, end_params),
                                            &tmp, 1, 0);
                     break;
@@ -101,75 +113,114 @@ public:
                     return;
                 }*/
                 case OP_ADD: {
-                    auto arg1 = pop_from_stack(stack, stack_size_ptr);
-                    auto arg2 = pop_from_stack(stack, stack_size_ptr);
-                    push_on_stack(stack, stack_size_ptr, arg1 + arg2);
+                    auto arg1 = pop();
+                    auto arg2 = pop();
+                    push( arg1 + arg2);
                     break;
                 }
                 case OP_SUB: {
-                    auto arg1 = pop_from_stack(stack, stack_size_ptr);
-                    auto arg2 = pop_from_stack(stack, stack_size_ptr);
-                    push_on_stack(stack, stack_size_ptr, arg2 - arg1);
+                    auto arg1 = pop();
+                    auto arg2 = pop();
+                    push( arg2 - arg1);
                     break;
                 }
                 case OP_MUL: {
-                    auto arg1 = pop_from_stack(stack, stack_size_ptr);
-                    auto arg2 = pop_from_stack(stack, stack_size_ptr);
-                    push_on_stack(stack, stack_size_ptr, arg2 * arg1);
+                    auto arg1 = pop();
+                    auto arg2 = pop();
+                    push(arg2 * arg1);
                     break;
                 }
                 case OP_DIV: {
-                    auto arg1 = pop_from_stack(stack, stack_size_ptr);
-                    auto arg2 = pop_from_stack(stack, stack_size_ptr);
+                    auto arg1 = pop();
+                    auto arg2 = pop();
                     // TODO: check that arg2 is not zero
-                    push_on_stack(stack, stack_size_ptr, arg2 / arg1);
+                    push(arg2 / arg1);
                     break;
                 }
                 case OP_EQUAL: {
-                    auto arg1 = pop_from_stack(stack, stack_size_ptr);
-                    auto arg2 = pop_from_stack(stack, stack_size_ptr);
-                    push_on_stack(stack, stack_size_ptr, arg2 == arg1);
+                    auto arg1 = pop();
+                    auto arg2 = pop();
+                    push(arg2 == arg1);
                     break;
                 }
                 case OP_GREATER: {
-                    auto arg1 = pop_from_stack(stack, stack_size_ptr);
-                    auto arg2 = pop_from_stack(stack, stack_size_ptr);
-                    push_on_stack(stack, stack_size_ptr, arg2 > arg1);
+                    auto arg1 = pop();
+                    auto arg2 = pop();
+                    push(arg2 > arg1);
                     break;
                 }
                 case OP_GREATER_OR_EQUAL: {
-                    auto arg1 = pop_from_stack(stack, stack_size_ptr);
-                    auto arg2 = pop_from_stack(stack, stack_size_ptr);
-                    push_on_stack(stack, stack_size_ptr, arg2 >= arg1);
+                    auto arg1 = pop();
+                    auto arg2 = pop();
+                    push(arg2 >= arg1);
                     break;
                 }
                 case OP_LESS: {
-                    auto arg1 = pop_from_stack(stack, stack_size_ptr);
-                    auto arg2 = pop_from_stack(stack, stack_size_ptr);
-                    push_on_stack(stack, stack_size_ptr, arg2 < arg1);
+                    auto arg1 = pop();
+                    auto arg2 = pop();
+                    push(arg2 < arg1);
                     break;
                 }
                 case OP_LESS_OR_EQUAL: {
-                    auto arg1 = pop_from_stack(stack, stack_size_ptr);
-                    auto arg2 = pop_from_stack(stack, stack_size_ptr);
-                    push_on_stack(stack, stack_size_ptr, arg2 <= arg1);
+                    auto arg1 = pop();
+                    auto arg2 = pop();
+                    push(arg2 <= arg1);
+                    break;
+                }
+                case OP_LOADI: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    push(insn_load_elem(memory, new_constant(arg), jit_type_int));
+                    break;
+                }
+                case OP_ADDI: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    push(pop() + new_constant(arg));
+                    break;
+                }
+                case OP_DUP: {
+                    push(peek_stack(stack, stack_size_ptr));
+                    break;
+                }
+                case OP_DISCARD: {
+                    pop();
+                    break;
+                }
+                case OP_GREATER_OR_EQUALI: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    //stack[stack_size - 1] = stack[stack_size - 1] >= arg;
+                    push(pop() >= new_constant(arg));
+                    break;
+                }
+                case OP_LOADADDI: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    //stack[stack_size - 1] += memory[arg];
+                    push(pop() + insn_load_elem(memory, new_constant(arg), jit_type_int));
                     break;
                 }
                 case 0xcafe: {
                     ip++;
+                    break;
+                }
+                case OP_DONE:
+                case OP_JUMP:
+                case OP_JUMP_IF_TRUE:
+                case OP_JUMP_IF_FALSE: {
+                    insn_store_elem(new_constant(ip_ptr), new_constant(0), new_constant(ip, jit_type_int));
+                    insn_return();
+                    return;
                 }
                 default: {
+                    insn_store_elem(new_constant(ip_ptr), new_constant(0), new_constant(ip, jit_type_int));
+                    cout << "UNKNOWN INSTRUCTION " << instructions[ip - 1] << endl;
                     insn_return();
                     return;
                 }
             }
         }
-    }
-
-    void push_on_stack(jit_value& stack, jit_value& stack_size_ptr, int arg) {
-        this->insn_store_elem(stack, insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int), new_constant(arg));
-        insn_store_elem(stack_size_ptr, new_constant(0),
-                        insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int) + new_constant(1));
     }
 
     void push_on_stack(jit_value& stack, jit_value& stack_size_ptr, jit_value&& arg) {
@@ -182,6 +233,11 @@ public:
         insn_store_elem(stack_size_ptr, new_constant(0),
                         insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int) - new_constant(1));
         return insn_load_elem(stack, insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int), jit_type_int);
+    }
+
+    jit_value peek_stack(jit_value& stack, jit_value& stack_size_ptr) {
+        return insn_load_elem(stack, insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int) - new_constant(1),
+                              jit_type_int);
     }
 
 protected:
@@ -373,6 +429,7 @@ public:
         while (ip < instrunctions_number) {
             if (is_jump(instructions[ip])) {
                 ip++;
+                // cerr << "executing a jump instr" << endl;
                 switch (instructions[ip - 1]) {
                     case OP_JUMP: {
                         auto arg = instructions[ip];
@@ -385,6 +442,8 @@ public:
                         ip++;
                         if (stack_pop()) {
                             ip = arg;
+                        } else {
+                            int dd = 9;
                         }
                         break;
                     }
@@ -393,6 +452,8 @@ public:
                         ip++;
                         if (!stack_pop()) {
                             ip = arg;
+                        } else {
+                            int dd = 9;
                         }
                         break;
                     }
@@ -401,10 +462,18 @@ public:
             else if (instructions[ip] == OP_DONE) {
                 return;
             } else {
-                if (jit_cache.count(ip) == 0) {
-                    jit_cache.insert_or_assign(ip, jit_compiled_func(context, instructions, true, 0, &ip, memory, stack, &stack_size));
+                auto block_start = ip;
+                if (jit_cache.count(block_start) == 0) {
+                    jit_compiled_func new_func(context, instructions, true, 0, &ip, memory, stack, &stack_size);
+                    new_func.build_start();
+                    new_func.build();
+                    new_func.compile();
+                    new_func.build_end();
+                    jit_cache.insert_or_assign(block_start, std::move(new_func));
+                } else {
+                    int gg= 9;
                 }
-                auto func = (void(*)())jit_cache.at(ip).closure();
+                auto func = (void(*)())jit_cache.at(block_start).closure();
                 func();
                 ip--;
             }
