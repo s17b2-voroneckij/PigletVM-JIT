@@ -66,13 +66,18 @@ public:
         memory = this->new_constant(memory_outer);
         auto stack = new_value(jit_type_create_pointer(jit_type_int, 1));
         stack = this->new_constant(stack_outer);
-        jit_value stack_size_ptr = new_value(jit_type_create_pointer(jit_type_int, 1));
-        stack_size_ptr = this->new_constant(stack_size_ptr_outer);
-        auto push = [this, &stack, &stack_size_ptr] (jit_value&& value) {
-            push_on_stack(stack, stack_size_ptr, std::move(value));
+        jit_value stack_size = new_value(jit_type_int);
+        stack_size = new_constant(0);
+        auto push = [this, &stack, &stack_size] (jit_value&& value) {
+            insn_store_elem(stack, stack_size, value);
+            stack_size = stack_size + new_constant(1);
         };
-        auto pop = [this, &stack, &stack_size_ptr] () {
-            return pop_from_stack(stack, stack_size_ptr);
+        auto pop = [this, &stack, &stack_size] () {
+            stack_size = stack_size - new_constant(1);
+            return insn_load_elem(stack, stack_size, jit_type_int);
+        };
+        auto peek = [this, &stack, &stack_size] () {
+            return insn_load_elem(stack, stack_size - new_constant(1), jit_type_int);
         };
         int& ip = *ip_ptr;
         unordered_map<int, jit_label> labels;
@@ -180,7 +185,7 @@ public:
                     break;
                 }
                 case OP_DUP: {
-                    push(peek_stack(stack, stack_size_ptr));
+                    push(peek());
                     break;
                 }
                 case OP_DISCARD: {
@@ -252,23 +257,6 @@ public:
                 }
             }
         }
-    }
-
-    void push_on_stack(jit_value& stack, jit_value& stack_size_ptr, jit_value&& arg) {
-        this->insn_store_elem(stack, insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int), arg);
-        insn_store_elem(stack_size_ptr, new_constant(0),
-                        insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int) + new_constant(1));
-    }
-
-    jit_value pop_from_stack(jit_value& stack, jit_value& stack_size_ptr) {
-        insn_store_elem(stack_size_ptr, new_constant(0),
-                        insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int) - new_constant(1));
-        return insn_load_elem(stack, insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int), jit_type_int);
-    }
-
-    jit_value peek_stack(jit_value& stack, jit_value& stack_size_ptr) {
-        return insn_load_elem(stack, insn_load_elem(stack_size_ptr, new_constant(0), jit_type_int) - new_constant(1),
-                              jit_type_int);
     }
 
 protected:
@@ -494,9 +482,12 @@ public:
                     jit_compiled_func new_func(context, instructions, true, 0, &ip, memory, stack, &stack_size);
                     new_func.build_start();
                     new_func.build();
+                    jit_dump_function(stdout, new_func.raw(), "main");
+
                     new_func.set_optimization_level(3);
                     new_func.compile();
                     new_func.build_end();
+                    jit_dump_function(stdout, new_func.raw(), "main");
                     cerr << "compilation done in " << (double )clock() / CLOCKS_PER_SEC << endl;
                     jit_cache.insert_or_assign(block_start, std::move(new_func));
                 }
@@ -558,7 +549,7 @@ int main(int argc, char** argv) {
     }
     VM vm(memory, file_size / sizeof(*memory));
     for (int i = 0; i < 1; i++) {
-        vm.run();
+        vm.jit_run();
     }
     if (munmap(memory, file_size) < 0 || close(fd)) {
         cerr << strerror(errno);
