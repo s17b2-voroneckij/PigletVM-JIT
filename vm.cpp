@@ -76,6 +76,7 @@ public:
             return pop_from_stack(stack, stack_size_ptr);
         };
         int& ip = *ip_ptr;
+        unordered_map<int, jit_label> labels;
         while (true) {
             ip++;
             switch (instructions[ip - 1]) {
@@ -202,16 +203,47 @@ public:
                     break;
                 }
                 case 0xcafe: {
+                    // skipping 0xbabe
                     ip++;
+                    // ip is now pointing to the instruction after the label
+                    if (labels.count(ip) == 0) {
+                        labels[ip] = jit_label_undefined;
+                    }
+                    insn_label(labels[ip]);
                     break;
                 }
-                case OP_DONE:
-                case OP_JUMP:
-                case OP_JUMP_IF_TRUE:
-                case OP_JUMP_IF_FALSE: {
+                case OP_DONE: {
+                    // return normally
                     insn_store_elem(new_constant(ip_ptr), new_constant(0), new_constant(ip, jit_type_int));
                     insn_return();
                     return;
+                }
+                case OP_JUMP: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    if (labels.count(arg) == 0) {
+                        labels[arg] = jit_label_undefined;
+                    }
+                    insn_branch_if(new_constant(true), labels[arg]);
+                    break;
+                }
+                case OP_JUMP_IF_TRUE: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    if (labels.count(arg) == 0) {
+                        labels[arg] = jit_label_undefined;
+                    }
+                    insn_branch_if(pop(), labels[arg]);
+                    break;
+                }
+                case OP_JUMP_IF_FALSE: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    if (labels.count(arg) == 0) {
+                        labels[arg] = jit_label_undefined;
+                    }
+                    insn_branch_if_not(pop(), labels[arg]);
+                    break;
                 }
                 default: {
                     insn_store_elem(new_constant(ip_ptr), new_constant(0), new_constant(ip, jit_type_int));
@@ -264,12 +296,12 @@ class VM {
 public:
     // program is the pointer to instructions; size is the number of instructions
     explicit VM(int* program, int size) : instructions(program), context() {
-        instrunctions_number = size;
+        instructions_number = size;
     }
 
     void run() {
         size_t ip = 0;
-        while (ip < instrunctions_number) {
+        while (ip < instructions_number) {
             ip++;
             switch (instructions[ip - 1]) {
                 case OP_JUMP: {
@@ -426,7 +458,7 @@ public:
 
     void jit_run() {
         ip = 0;
-        while (ip < instrunctions_number) {
+        while (ip < instructions_number) {
             if (is_jump(instructions[ip])) {
                 ip++;
                 // cerr << "executing a jump instr" << endl;
@@ -442,8 +474,6 @@ public:
                         ip++;
                         if (stack_pop()) {
                             ip = arg;
-                        } else {
-                            int dd = 9;
                         }
                         break;
                     }
@@ -452,8 +482,6 @@ public:
                         ip++;
                         if (!stack_pop()) {
                             ip = arg;
-                        } else {
-                            int dd = 9;
                         }
                         break;
                     }
@@ -467,14 +495,16 @@ public:
                     jit_compiled_func new_func(context, instructions, true, 0, &ip, memory, stack, &stack_size);
                     new_func.build_start();
                     new_func.build();
+                    new_func.set_optimization_level(3);
                     new_func.compile();
                     new_func.build_end();
+                    cerr << "compilation done in " << (double )clock() / CLOCKS_PER_SEC << endl;
                     jit_cache.insert_or_assign(block_start, std::move(new_func));
-                } else {
-                    int gg= 9;
                 }
                 auto func = (void(*)())jit_cache.at(block_start).closure();
+                double clocks_before = clock();
                 func();
+                cerr << "compiled function ran in " << (clock() - clocks_before) / CLOCKS_PER_SEC << endl;
                 ip--;
             }
         }
@@ -502,7 +532,7 @@ private:
     int memory[MEMORY_SIZE];
     int stack_size = 0;
     int ip = 0;
-    int instrunctions_number = 0;
+    int instructions_number = 0;
 };
 
 int main(int argc, char** argv) {
@@ -529,7 +559,7 @@ int main(int argc, char** argv) {
     }
     VM vm(memory, file_size / sizeof(*memory));
     for (int i = 0; i < 1; i++) {
-        vm.jit_run();
+        vm.run();
     }
     if (munmap(memory, file_size) < 0 || close(fd)) {
         cerr << strerror(errno);

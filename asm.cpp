@@ -3,8 +3,6 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -61,14 +59,14 @@ int main(int argc, char** argv) {
     while (in >> buf) {
         if (*buf.rbegin() == ':') {
             // this is a label
-            // it should point to the next insruction that we will push
+            // it should point to the next instruction that we will push, plus two, because we will push cafe babe
 
             // pop :
             buf.pop_back();
-            labels[buf] = result.size();
             // put information about the presence of a label
             result.push_back(0xcafe);
             result.push_back(0xbabe);
+            labels[buf] = result.size();
         } else {
             // otherwise this is an instruction
             // if it has an argument, we need to read it
