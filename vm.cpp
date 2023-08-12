@@ -79,154 +79,157 @@ protected:
         return ip;
     }
 
-    int switch_instruction(int ip) {
+    int switch_instruction(int num) {
         /*
          * accepts an instruction pointer pointing to the next instruction to execute, and returns the
          * new instruction pointer after execution
          */
-        ip++;
-        switch (instructions[ip - 1]) {
-            case OP_JUMP: {
-                ip = jump_instruction(ip);
-                break;
-            }
-            case OP_JUMP_IF_TRUE: {
-                ip = jump_if_true_instruction(ip);
-                break;
-            }
-            case OP_JUMP_IF_FALSE: {
-                ip = jump_if_false_instruction(ip);
-                break;
-            }
-            case OP_LOADADDI: {
-                auto arg = instructions[ip];
-                ip++;
-                stack_peek() += load_from_memory(arg);
-                break;
-            }
-            case OP_LOADI: {
-                auto arg = instructions[ip];
-                ip++;
-                stack_push(load_from_memory(arg));
-                break;
-            }
-            case OP_PUSHI: {
-                auto arg = instructions[ip];
-                ip++;
-                stack_push(arg);
-                break;
-            }
-            case OP_DISCARD: {
-                stack_pop();
-                break;
-            }
-            case OP_STOREI: {
-                auto addr = instructions[ip];
-                ip++;
-                store_to_memory(addr, stack_pop());
-                break;
-            }
-            case OP_LOAD: {
-                auto addr = stack_pop();
-                stack_push(load_from_memory(addr));
-                break;
-            }
-            case OP_STORE: {
-                auto val = stack_pop();
-                auto addr = stack_pop();
-                store_to_memory(addr, val);
-                break;
-            }
-            case OP_ADDI: {
-                auto arg = instructions[ip];
-                ip++;
-                stack_peek() += arg;
-                break;
-            }
-            case OP_DUP: {
-                stack_push(stack_peek());
-                break;
-            }
-            case OP_SUB: {
-                auto arg = stack_pop();
-                stack_peek() -= arg;
-                break;
-            }
-            case OP_ADD: {
-                auto arg = stack_pop();
-                stack_peek() += arg;
-                break;
-            }
-            case OP_DIV: {
-                auto arg = stack_pop();
-                auto arg2 = stack_pop();
-                stack_push(arg2 / arg);
-                break;
-            }
-            case OP_MUL: {
-                auto arg = stack_pop();
-                auto arg2 = stack_pop();
-                stack_push(arg * arg2);
-                break;
-            }
-            case OP_ABORT: {
-                return -1;
-            }
-            case OP_DONE: {
-                return -1;
-            }
-            case OP_PRINT: {
-                print(stack_pop());
-                break;
-            }
-            case OP_POP_RES: {
-                stack_pop();
-                break;
-            }
-            case OP_GREATER_OR_EQUALI: {
-                auto arg = instructions[ip];
-                auto arg2 = stack_pop();
-                ip++;
-                stack_push(arg2 >= arg);
-                break;
-            }
-            case OP_GREATER_OR_EQUAL: {
-                auto arg = stack_pop();
-                auto arg2 = stack_pop();
-                stack_push(arg2 >= arg);
-                break;
-            }
-            case OP_GREATER: {
-                auto arg = stack_pop();
-                auto arg2 = stack_pop();
-                stack_push(arg2 > arg);
-                break;
-            }
-            case OP_LESS: {
-                auto arg = stack_pop();
-                auto arg2 = stack_pop();
-                stack_push(arg2 < arg);
-                break;
-            }
-            case OP_LESS_OR_EQUAL: {
-                auto arg = stack_pop();
-                auto arg2 = stack_pop();
-                stack_push(arg2 <= arg);
-                break;
-            }
-            case OP_EQUAL: {
-                auto arg = stack_pop();
-                auto arg2 = stack_pop();
-                stack_push(arg2 == arg);
-                break;
-            }
-            case 0xcafe: {
-                // skip 0xbabe
-                ip++;
-                break;
-            }
-            default: {
-                throw runtime_error("not implemented instruction");
+        int ip = 0;
+        while (ip < num) {
+            ip++;
+            switch (instructions[ip - 1]) {
+                case OP_JUMP: {
+                    ip = jump_instruction(ip);
+                    break;
+                }
+                case OP_JUMP_IF_TRUE: {
+                    ip = jump_if_true_instruction(ip);
+                    break;
+                }
+                case OP_JUMP_IF_FALSE: {
+                    ip = jump_if_false_instruction(ip);
+                    break;
+                }
+                case OP_LOADADDI: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    stack_peek() += load_from_memory(arg);
+                    break;
+                }
+                case OP_LOADI: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    stack_push(load_from_memory(arg));
+                    break;
+                }
+                case OP_PUSHI: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    stack_push(arg);
+                    break;
+                }
+                case OP_DISCARD: {
+                    stack_pop();
+                    break;
+                }
+                case OP_STOREI: {
+                    auto addr = instructions[ip];
+                    ip++;
+                    store_to_memory(addr, stack_pop());
+                    break;
+                }
+                case OP_LOAD: {
+                    auto addr = stack_pop();
+                    stack_push(load_from_memory(addr));
+                    break;
+                }
+                case OP_STORE: {
+                    auto val = stack_pop();
+                    auto addr = stack_pop();
+                    store_to_memory(addr, val);
+                    break;
+                }
+                case OP_ADDI: {
+                    auto arg = instructions[ip];
+                    ip++;
+                    stack_peek() += arg;
+                    break;
+                }
+                case OP_DUP: {
+                    stack_push(stack_peek());
+                    break;
+                }
+                case OP_SUB: {
+                    auto arg = stack_pop();
+                    stack_peek() -= arg;
+                    break;
+                }
+                case OP_ADD: {
+                    auto arg = stack_pop();
+                    stack_peek() += arg;
+                    break;
+                }
+                case OP_DIV: {
+                    auto arg = stack_pop();
+                    auto arg2 = stack_pop();
+                    stack_push(arg2 / arg);
+                    break;
+                }
+                case OP_MUL: {
+                    auto arg = stack_pop();
+                    auto arg2 = stack_pop();
+                    stack_push(arg * arg2);
+                    break;
+                }
+                case OP_ABORT: {
+                    return -1;
+                }
+                case OP_DONE: {
+                    return -1;
+                }
+                case OP_PRINT: {
+                    print(stack_pop());
+                    break;
+                }
+                case OP_POP_RES: {
+                    stack_pop();
+                    break;
+                }
+                case OP_GREATER_OR_EQUALI: {
+                    auto arg = instructions[ip];
+                    auto arg2 = stack_pop();
+                    ip++;
+                    stack_push(arg2 >= arg);
+                    break;
+                }
+                case OP_GREATER_OR_EQUAL: {
+                    auto arg = stack_pop();
+                    auto arg2 = stack_pop();
+                    stack_push(arg2 >= arg);
+                    break;
+                }
+                case OP_GREATER: {
+                    auto arg = stack_pop();
+                    auto arg2 = stack_pop();
+                    stack_push(arg2 > arg);
+                    break;
+                }
+                case OP_LESS: {
+                    auto arg = stack_pop();
+                    auto arg2 = stack_pop();
+                    stack_push(arg2 < arg);
+                    break;
+                }
+                case OP_LESS_OR_EQUAL: {
+                    auto arg = stack_pop();
+                    auto arg2 = stack_pop();
+                    stack_push(arg2 <= arg);
+                    break;
+                }
+                case OP_EQUAL: {
+                    auto arg = stack_pop();
+                    auto arg2 = stack_pop();
+                    stack_push(arg2 == arg);
+                    break;
+                }
+                case 0xcafe: {
+                    // skip 0xbabe
+                    ip++;
+                    break;
+                }
+                default: {
+                    throw runtime_error("not implemented instruction");
+                }
             }
         }
         return ip;
@@ -487,77 +490,31 @@ private:
 class VM: public BaseExecutor<int> {
 public:
     // program is the pointer to instructions; size is the number of instructions
-    explicit VM(int *program, int size) : BaseExecutor(program), instructions(program),
-                                                             context() {
+    explicit VM(int *program, int size) : BaseExecutor(program), instructions(program) {
         instructions_number = size;
     }
 
     void run() {
         int ip_ = 0;
-        while (ip_ < instructions_number) {
-            ip_ = switch_instruction(ip_);
-            if (ip_ < 0) {
-                // we are done
-                return;
-            }
-        }
+        switch_instruction(instructions_number);
     }
 
     void jit_run() {
-        ip = 0;
-        while (ip < instructions_number) {
-            if (is_jump(instructions[ip])) {
-                ip++;
-                // cerr << "executing a jump instr" << endl;
-                switch (instructions[ip - 1]) {
-                    case OP_JUMP: {
-                        auto arg = instructions[ip];
-                        ip++;
-                        ip = arg;
-                        break;
-                    }
-                    case OP_JUMP_IF_TRUE: {
-                        auto arg = instructions[ip];
-                        ip++;
-                        if (stack_pop()) {
-                            ip = arg;
-                        }
-                        break;
-                    }
-                    case OP_JUMP_IF_FALSE: {
-                        auto arg = instructions[ip];
-                        ip++;
-                        if (!stack_pop()) {
-                            ip = arg;
-                        }
-                        break;
-                    }
-                }
-            }
-            else if (instructions[ip] == OP_DONE) {
-                return;
-            } else {
-                auto block_start = ip;
-                if (jit_cache.count(block_start) == 0) {
-                    jit_compiled_func new_func(context, instructions, true, 0, &ip, memory, stack, &stack_size);
-                    new_func.build_start();
-                    new_func.build();
-                    jit_dump_function(stdout, new_func.raw(), "main");
+        int ip = 0;
+        jit_context context;
+        jit_compiled_func new_func(context, instructions, true, 0, &ip, memory, stack, &stack_size);
+        new_func.build_start();
+        new_func.build();
+        jit_dump_function(stdout, new_func.raw(), "main");
 
-                    new_func.set_optimization_level(3);
-                    new_func.compile();
-                    new_func.build_end();
-                    jit_dump_function(stdout, new_func.raw(), "main");
-                    cerr << "compilation done in " << (double )clock() / CLOCKS_PER_SEC << endl;
-                    jit_cache.insert_or_assign(block_start, std::move(new_func));
-                }
-                auto func = (void(*)())jit_cache.at(block_start).closure();
-                double clocks_before = clock();
-                func();
-                cerr << "compiled function ran in " << (clock() - clocks_before) / CLOCKS_PER_SEC << endl;
-                ip--;
-            }
-        }
+        new_func.set_optimization_level(3);
+        new_func.compile();
+        new_func.build_end();
+        jit_dump_function(stdout, new_func.raw(), "main");
+        auto func = (void(*)())new_func.closure();
+        double clocks_before = clock();
+        func();
+        cerr << "compiled function ran in " << (clock() - clocks_before) / CLOCKS_PER_SEC << endl;
     }
 
 private:
@@ -593,12 +550,9 @@ private:
     }
 
     int* instructions;
-    jit_context context;
-    unordered_map<int, jit_compiled_func> jit_cache;
     int stack[STACK_SIZE];
     int memory[MEMORY_SIZE];
     int stack_size = 0;
-    int ip = 0;
     int instructions_number = 0;
 };
 
@@ -626,7 +580,7 @@ int main(int argc, char** argv) {
     }
     VM vm(memory, file_size / sizeof(*memory));
     for (int i = 0; i < 1; i++) {
-        vm.run();
+        vm.jit_run();
     }
     if (munmap(memory, file_size) < 0 || close(fd)) {
         cerr << strerror(errno);
