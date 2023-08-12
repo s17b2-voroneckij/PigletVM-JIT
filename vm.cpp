@@ -46,7 +46,20 @@ void print_int(int n) {
     cout << n << "\n";
 }
 
-template<typename BaseType>
+template<typename T>
+concept NumberLike = requires(T a, T b){
+    a + b;
+    a - b;
+    a * b;
+    a / b;
+    a > b;
+    a >= b;
+    a < b;
+    a <= b;
+    a == b;
+};
+
+template<NumberLike BaseType>
 class BaseExecutor {
     /*
      * provides the skeleton of a VM for Piglet bytecode
@@ -90,20 +103,20 @@ protected:
                     break;
                 }
                 case OP_LOADADDI: {
-                    auto arg = get_argument(ip);
+                    NumberLike auto arg = get_argument(ip);
                     ip++;
-                    auto arg2 = stack_pop();
+                    NumberLike auto arg2 = stack_pop();
                     stack_push(arg2 + load_from_memory(arg));
                     break;
                 }
                 case OP_LOADI: {
-                    auto arg = get_argument(ip);
+                    NumberLike auto arg = get_argument(ip);
                     ip++;
                     stack_push(load_from_memory(arg));
                     break;
                 }
                 case OP_PUSHI: {
-                    auto arg = get_argument(ip);
+                    NumberLike auto arg = get_argument(ip);
                     ip++;
                     stack_push(arg);
                     break;
@@ -481,7 +494,7 @@ int main(int argc, char** argv) {
     }
     VM vm(memory, file_size / sizeof(*memory));
     for (int i = 0; i < 1; i++) {
-        vm.jit_run();
+        vm.run();
     }
     if (munmap(memory, file_size) < 0 || close(fd)) {
         cerr << strerror(errno);
