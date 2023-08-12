@@ -101,8 +101,7 @@ protected:
             case OP_LOADADDI: {
                 auto arg = instructions[ip];
                 ip++;
-                auto top = stack_pop();
-                stack_push(top + load_from_memory(arg));
+                stack_peek() += load_from_memory(arg);
                 break;
             }
             case OP_LOADI: {
@@ -141,27 +140,21 @@ protected:
             case OP_ADDI: {
                 auto arg = instructions[ip];
                 ip++;
-                auto top = stack_pop();
-                stack_push(top + arg);
+                stack_peek() += arg;
                 break;
             }
             case OP_DUP: {
-                BaseType top1 = stack_pop();
-                BaseType top_copy = top1;
-                stack_push(top1);
-                stack_push(top_copy);
+                stack_push(stack_peek());
                 break;
             }
             case OP_SUB: {
                 auto arg = stack_pop();
-                auto arg2 = stack_pop();
-                stack_push(arg2 - arg);
+                stack_peek() -= arg;
                 break;
             }
             case OP_ADD: {
                 auto arg = stack_pop();
-                auto arg2 = stack_pop();
-                stack_push(arg + arg2);
+                stack_peek() += arg;
                 break;
             }
             case OP_DIV: {
@@ -248,6 +241,8 @@ protected:
     virtual void stack_push(BaseType element) = 0;
 
     virtual void print(BaseType element) = 0;
+
+    virtual BaseType& stack_peek() = 0;
 
     explicit BaseExecutor(int *instructions) : instructions(instructions) {}
     virtual ~BaseExecutor() = default;
@@ -587,6 +582,10 @@ private:
 
     int load_from_memory(int index) override {
         return memory[index];
+    }
+
+    int& stack_peek() override {
+        return stack[stack_size - 1];
     }
 
     void print(int element) override {
