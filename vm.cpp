@@ -298,7 +298,7 @@ public:
         return ip;
     }
 
-    void build() {
+    void build() override {
         cerr << "function being built" << endl;
         memory = new_value(jit_type_create_pointer(jit_type_int, 1));
         memory = this->new_constant(memory_outer);
@@ -316,7 +316,7 @@ public:
     }
 
 protected:
-    jit_value load_from_memory(jit_value index) {
+    jit_value load_from_memory(const jit_value& index) {
         return insn_load_elem(memory, index, jit_type_int);
     }
 
@@ -324,7 +324,7 @@ protected:
         return new_constant(instructions[ip]);
     }
 
-    void store_to_memory(jit_value index, jit_value element) {
+    void store_to_memory(const jit_value& index, const jit_value& element) {
         insn_store_elem(memory, index, element);
     }
 
@@ -333,18 +333,18 @@ protected:
         return insn_load_elem(stack, stack_size, jit_type_int);
     }
 
-    void stack_push(jit_value element) {
+    void stack_push(const jit_value& element) {
         insn_store_elem(stack, stack_size, element);
         stack_size = stack_size + new_constant(1);
     }
 
-    void print(jit_value element) {
+    void print(const jit_value& element) {
         auto tmp = element.raw();
         this->insn_call_native("print_int", (void *)(&print_int), signature_helper(jit_type_void, jit_type_int, end_params),
                                &tmp, 1, 0);
     }
 
-    jit_type_t create_signature() {
+    jit_type_t create_signature() override {
         auto ret_type = (is_void ? jit_type_void : jit_type_int);
         jit_type_t params[num_args];
         for (int i = 0; i < num_args; i++) {
