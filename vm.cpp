@@ -47,7 +47,7 @@ void print_int(int n) {
 }
 
 template<typename T>
-concept NumberLike = requires(T a, T b){
+concept NumberLike = requires(T a, T b) {
     a + b;
     a - b;
     a * b;
@@ -59,29 +59,29 @@ concept NumberLike = requires(T a, T b){
     a == b;
 };
 
-template<NumberLike BaseType>
+template<typename Callable>
+concept IntFromInt = requires(Callable callable, int a) {
+    {callable(a)} -> std::same_as<int>;
+};
+
+
+template<typename Callable, typename Ret>
+concept FromInt = requires(Callable callable, int a) {
+    {callable(a)} -> std::same_as<Ret>;
+};
+
 class BaseExecutor {
     /*
      * provides the skeleton of a VM for Piglet bytecode
      * has the reference implementation of all instructions that
      * uses common funcs not implemented in this class
      */
-protected:
-    virtual int jump_if_true_instruction(int ip) = 0;
-
-    virtual int jump_instruction(int ip) = 0;
-
-    virtual int jump_if_false_instruction(int ip) = 0;
-
-    virtual int process_cafe(int ip) {
-        // skip 0xbabe
-        ip++;
-        return ip;
-    }
-
-    virtual BaseType get_argument(int ip) = 0;
-
-    int switch_instruction(int num) {
+public:
+    template<NumberLike BaseType, IntFromInt T1, IntFromInt T2, IntFromInt T3, IntFromInt T4, FromInt<BaseType> T5, typename T6, typename T7,
+            typename T8, typename T9, typename T10>
+    static int switch_instruction(T1 jump_if_true_instruction, T2 jump_instruction, T3 jump_if_false_instruction, T4 process_cafe,
+                           T5 get_argument, T6 load_from_memory, T7 store_to_memory, T8 stack_pop,
+                           T9 stack_push, T10 print, const int* instructions, int num) {
         /*
          * accepts an instruction pointer pointing to the next instruction to execute, and returns the
          * new instruction pointer after execution
@@ -241,39 +241,23 @@ protected:
         }
         return ip;
     }
-
-    virtual BaseType load_from_memory(BaseType index) = 0;
-
-    virtual void store_to_memory(BaseType index, BaseType element) = 0;
-
-    virtual BaseType stack_pop() = 0;
-
-    virtual void stack_push(BaseType element) = 0;
-
-    virtual void print(BaseType element) = 0;
-
-    explicit BaseExecutor(int *instructions) : instructions(instructions) {}
-    virtual ~BaseExecutor() = default;
-
-private:
-    int* instructions;
 };
 
-class jit_compiled_func : public jit_function, public BaseExecutor<jit_value>
+class jit_compiled_func : public jit_function
 {
 public:
     explicit jit_compiled_func(jit_context& context, int* instructions, bool is_void, int num_args, int* ip , int* memory, int* stack, int instr_num):
-                     jit_function(context), BaseExecutor<jit_value>(instructions),
+                     jit_function(context),
                      instructions(instructions), num_args(num_args), ip_ptr(ip), is_void(is_void)
     {
         this->memory_outer = memory;
         this->stack_outer = stack;
-        this->instr_num = instr_num;
+        this->instructions_number = instr_num;
         create();
         set_recompilable();
     }
 
-    int jump_if_true_instruction(int ip) override {
+    int jump_if_true_instruction(int ip) {
         auto arg = instructions[ip];
         ip++;
         if (labels.count(arg) == 0) {
@@ -283,7 +267,7 @@ public:
         return ip;
     }
 
-    int jump_instruction(int ip) override {
+    int jump_instruction(int ip) {
         auto arg = instructions[ip];
         ip++;
         if (labels.count(arg) == 0) {
@@ -293,7 +277,7 @@ public:
         return ip;
     }
 
-    int jump_if_false_instruction(int ip) override {
+    int jump_if_false_instruction(int ip) {
         auto arg = instructions[ip];
         ip++;
         if (labels.count(arg) == 0) {
@@ -303,7 +287,7 @@ public:
         return ip;
     }
 
-    int process_cafe(int ip) override {
+    int process_cafe(int ip) {
         // skipping 0xbabe
         ip++;
         // ip is now pointing to the instruction after the label
@@ -314,7 +298,7 @@ public:
         return ip;
     }
 
-    void build() override {
+    void build() {
         cerr << "function being built" << endl;
         memory = new_value(jit_type_create_pointer(jit_type_int, 1));
         memory = this->new_constant(memory_outer);
@@ -322,40 +306,45 @@ public:
         stack = this->new_constant(stack_outer);
         stack_size = new_value(jit_type_int);
         stack_size = new_constant(0);
-        switch_instruction(instr_num);
+        BaseExecutor::switch_instruction<jit_value>([this] (int a) { return jump_if_true_instruction(a);}, [this] (int a) { return jump_instruction(a);},
+                                              [this] (int a) { return jump_if_false_instruction(a);}, [this] (int a) { return process_cafe(a);},
+                                              [this] (int a) { return get_argument(a);}, [this] (const jit_value& a) { return load_from_memory(a);},
+                                              [this] (const jit_value& a, const jit_value& b) { store_to_memory(a, b);}, [this] () { return stack_pop();},
+                                              [this] (const jit_value& a) { return stack_push(a);}, [this] (const jit_value& a) { return print(a);},
+                                              instructions, instructions_number);
         insn_return();
     }
 
 protected:
-    jit_value load_from_memory(jit_value index) override {
+    jit_value load_from_memory(jit_value index) {
         return insn_load_elem(memory, index, jit_type_int);
     }
 
-    jit_value get_argument(int ip) override {
+    jit_value get_argument(int ip) {
         return new_constant(instructions[ip]);
     }
 
-    void store_to_memory(jit_value index, jit_value element) override {
+    void store_to_memory(jit_value index, jit_value element) {
         insn_store_elem(memory, index, element);
     }
 
-    jit_value stack_pop() override {
+    jit_value stack_pop() {
         stack_size = stack_size - new_constant(1);
         return insn_load_elem(stack, stack_size, jit_type_int);
     }
 
-    void stack_push(jit_value element) override {
+    void stack_push(jit_value element) {
         insn_store_elem(stack, stack_size, element);
         stack_size = stack_size + new_constant(1);
     }
 
-    void print(jit_value element) override {
+    void print(jit_value element) {
         auto tmp = element.raw();
         this->insn_call_native("print_int", (void *)(&print_int), signature_helper(jit_type_void, jit_type_int, end_params),
                                &tmp, 1, 0);
     }
 
-    jit_type_t create_signature() override {
+    jit_type_t create_signature() {
         auto ret_type = (is_void ? jit_type_void : jit_type_int);
         jit_type_t params[num_args];
         for (int i = 0; i < num_args; i++) {
@@ -371,24 +360,35 @@ private:
     bool is_void;
     int* memory_outer;
     int* stack_outer;
-    int instr_num;
+    int instructions_number;
     unordered_map<int, jit_label> labels;
     jit_value memory, stack, stack_size;
 };
 
-class VM: public BaseExecutor<int> {
+class VM {
 public:
     // program is the pointer to instructions; size is the number of instructions
-    explicit VM(int *program, int size) : BaseExecutor(program), instructions(program) {
+    explicit VM(int *program, int size) {
+        instructions = program;
         instructions_number = size;
     }
 
     void run() {
-        int ip_ = 0;
-        switch_instruction(instructions_number);
+        BaseExecutor::switch_instruction<int>([this] (int a) { return jump_if_true_instruction(a);}, [this] (int a) { return jump_instruction(a);},
+                                              [this] (int a) { return jump_if_false_instruction(a);}, [] (int a) { return process_cafe(a);},
+                                              [this] (int a) { return get_argument(a);}, [this] (int a) { return load_from_memory(a);},
+                                              [this] (int a, int b) { store_to_memory(a, b);}, [this] () { return stack_pop();},
+                                              [this] (int a) { return stack_push(a);}, [] (int a) { return print(a);},
+                                              instructions, instructions_number);
     }
 
-    int jump_if_true_instruction(int ip) override {
+    static int process_cafe(int ip) {
+        // skip 0xbabe
+        ip++;
+        return ip;
+    }
+
+    int jump_if_true_instruction(int ip) {
         auto arg = instructions[ip];
         ip++;
         if (stack_pop()) {
@@ -397,14 +397,14 @@ public:
         return ip;
     }
 
-    int jump_instruction(int ip) override {
+    int jump_instruction(int ip) {
         auto arg = instructions[ip];
         ip++;
         ip = arg;
         return ip;
     }
 
-    int jump_if_false_instruction(int ip) override {
+    int jump_if_false_instruction(int ip) {
         auto arg = instructions[ip];
         ip++;
         if (!stack_pop()) {
@@ -413,7 +413,7 @@ public:
         return ip;
     }
 
-    int get_argument(int ip) override {
+    int get_argument(int ip) {
         return instructions[ip];
     }
 
@@ -436,30 +436,26 @@ public:
     }
 
 private:
-    static bool is_jump(int instr) {
-        return instr == OP_JUMP || instr == OP_JUMP_IF_FALSE || instr == OP_JUMP_IF_TRUE;
-    }
-
     friend class jit_compiled_func;
 
-    void store_to_memory(int addr, int value) override {
+    void store_to_memory(int addr, int value) {
         memory[addr] = value;
     }
 
-    void stack_push(int element) override {
+    void stack_push(int element) {
         stack[stack_size] = element;
         stack_size++;
     }
 
-    int stack_pop() override {
+    int stack_pop() {
         return stack[--stack_size];
     }
 
-    int load_from_memory(int index) override {
+    int load_from_memory(int index) {
         return memory[index];
     }
 
-    void print(int element) override {
+    static void print(int element) {
         cout << element << "\n";
     }
 
@@ -494,7 +490,7 @@ int main(int argc, char** argv) {
     }
     VM vm(memory, file_size / sizeof(*memory));
     for (int i = 0; i < 1; i++) {
-        vm.run();
+        vm.jit_run();
     }
     if (munmap(memory, file_size) < 0 || close(fd)) {
         cerr << strerror(errno);
