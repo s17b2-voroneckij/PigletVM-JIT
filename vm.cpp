@@ -356,7 +356,6 @@ protected:
 private:
     int* instructions;
     int num_args;
-    int* ip_ptr;
     bool is_void;
     int* memory_outer;
     int* stack_outer;
