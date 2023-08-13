@@ -137,7 +137,7 @@ protected:
                     break;
                 }
                 case OP_STORE: {
-                    auto val = stack_pop();
+                    BaseType val = stack_pop();
                     auto addr = stack_pop();
                     store_to_memory(addr, val);
                     break;
