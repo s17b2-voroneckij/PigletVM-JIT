@@ -248,7 +248,7 @@ class jit_compiled_func : public jit_function
 public:
     explicit jit_compiled_func(jit_context& context, int* instructions, bool is_void, int num_args, int* ip , int* memory, int* stack, int instr_num):
                      jit_function(context),
-                     instructions(instructions), num_args(num_args), ip_ptr(ip), is_void(is_void)
+                     instructions(instructions), num_args(num_args), is_void(is_void)
     {
         this->memory_outer = memory;
         this->stack_outer = stack;
